@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio & Text Translation</title>
+  <style>
+    body { 
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f7fa;
+      color: #333;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h2 { color: #2c3e50; text-align: center; margin-bottom: 20px; }
+    section {
+      margin-bottom: 20px;
+      padding: 15px;
+      border-radius: 6px;
+      background-color: #f8f9fa;
+    }
+    h3 { margin-top: 0; color: #3498db; }
+    .text-display {
+      min-height: 60px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: white;
+      margin-top: 10px;
+    }
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 8px;
+      transition: background-color 0.2s;
+    }
+    button:hover { background-color: #2980b9; }
+    button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+    input, select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin: 5px 10px 5px 0; }
+    .record-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .status { margin-top: 10px; color: #7f8c8d; font-style: italic; }
+    .spinner {
+      display: none;
+      margin-left: 10px;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(0,0,0,0.1);
+      border-radius: 50%;
+      border-top-color: #3498db;
+      animation: spin 1s ease infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    audio { width: 100%; margin-top: 10px; }
+    .play-output-button { margin-top: 10px; background-color: #27ae60; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Audio Translation Tool</h2>
+
+    <!-- Language Selection -->
+    <section>
+      <h3>Speech Recognition Language</h3>
+      <select id="languageInput">
+        <option value="en">English</option>
+        <option value="te">Telugu</option>
+        <option value="hi">Hindi</option>
+        <option value="fr">French</option>
+        <option value="es">Spanish</option>
+      </select>
+    </section>
+
+    <!-- Audio Input Section -->
+    <section>
+      <h3>Audio Input</h3>
+      <div>
+        <input type="file" id="audioFile" accept="audio/*">
+        <button id="fileUploadBtn">Upload & Transcribe</button>
+        <span class="spinner" id="uploadSpinner"></span>
+      </div>
+      
+      <div class="record-controls">
+        <button id="recordBtn">Start Recording</button>
+        <button id="stopBtn" disabled>Stop Recording</button>
+        <button id="recordUploadBtn" disabled>Transcribe Recording</button>
+        <span class="spinner" id="recordSpinner"></span>
+      </div>
+      
+      <audio id="audioPlayer" controls style="display:none;"></audio>
+      <div class="status" id="recordingStatus"></div>
+    </section>
+
+    <!-- Display Transcription -->
+    <section>
+      <h3>Transcription</h3>
+      <div id="transcription" class="text-display">Transcription will appear here.</div>
+    </section>
+
+    <!-- Text Translation Section -->
+    <section>
+      <h3>Text Translation</h3>
+      <div>
+        <label>From:</label>
+        <select id="input-lang">
+          <option value="auto">Auto Detect</option>
+          <option value="en">English</option>
+          <option value="te">Telugu</option>
+          <option value="hi">Hindi</option>
+          <option value="fr">French</option>
+          <option value="es">Spanish</option>
+        </select>
+        <label>To:</label>
+        <select id="output-lang">
+          <option value="en">English</option>
+          <option value="te">Telugu</option>
+          <option value="hi">Hindi</option>
+          <option value="fr">French</option>
+          <option value="es">Spanish</option>
+        </select>
+        <button id="translateBtn">Translate</button>
+        <span class="spinner" id="translateSpinner"></span>
+      </div>
+    </section>
+
+    <!-- Display Translated Text -->
+    <section>
+      <h3>Translated Text</h3>
+      <div id="text-display" class="text-display">Translation will appear here.</div>
+      <button id="speakTranslationBtn" class="play-output-button">Get Text-to-Speech</button>
+      <span class="spinner" id="ttsSpinner"></span>
+      <audio id="ttsAudio" controls style="display:none;"></audio>
+    </section>
+  </div>
+
+  <script>
+    // API URL
+    const backendURL = "http://127.0.0.1:8000";
+    
+    // DOM elements
+    const elements = {
+      recordBtn: document.getElementById("recordBtn"),
+      stopBtn: document.getElementById("stopBtn"),
+      recordUploadBtn: document.getElementById("recordUploadBtn"),
+      fileUploadBtn: document.getElementById("fileUploadBtn"),
+      translateBtn: document.getElementById("translateBtn"),
+      speakTranslationBtn: document.getElementById("speakTranslationBtn"),
+      audioFile: document.getElementById("audioFile"),
+      languageInput: document.getElementById("languageInput"),
+      inputLang: document.getElementById("input-lang"),
+      outputLang: document.getElementById("output-lang"),
+      recordingStatus: document.getElementById("recordingStatus"),
+      audioPlayer: document.getElementById("audioPlayer"),
+      transcription: document.getElementById("transcription"),
+      translation: document.getElementById("text-display"),
+      ttsAudio: document.getElementById("ttsAudio"),
+      uploadSpinner: document.getElementById("uploadSpinner"),
+      recordSpinner: document.getElementById("recordSpinner"),
+      translateSpinner: document.getElementById("translateSpinner"),
+      ttsSpinner: document.getElementById("ttsSpinner")
+    };
+    
+    // Global state
+    let mediaRecorder;
+    let audioChunks = [];
+    let currentMimeType = "";
+    
+    // Helper functions
+    function toggleSpinner(spinner, show) {
+      spinner.style.display = show ? "inline-block" : "none";
+    }
+    
+    function showError(message) {
+      alert(message);
+    }
+    
+    // Set up recording
+    elements.recordBtn.addEventListener("click", async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // Find best supported mime type
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          currentMimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          currentMimeType = 'audio/webm';
+        } else {
+          currentMimeType = '';
+        }
+        
+        mediaRecorder = new MediaRecorder(stream, 
+          currentMimeType ? { mimeType: currentMimeType } : undefined);
+        
+        mediaRecorder.start();
+        elements.recordBtn.disabled = true;
+        elements.stopBtn.disabled = false;
+        elements.recordUploadBtn.disabled = true;
+        elements.audioPlayer.style.display = "none";
+        
+        audioChunks = [];
+        elements.recordingStatus.textContent = "Recording in progress...";
+        
+        mediaRecorder.ondataavailable = event => {
+          if (event.data && event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+      } catch (err) {
+        elements.recordingStatus.textContent = `Error: ${err.message}`;
+      }
+    });
+
+    // Stop recording
+    elements.stopBtn.addEventListener("click", () => {
+      mediaRecorder.stop();
+      elements.recordBtn.disabled = false;
+      elements.stopBtn.disabled = true;
+      elements.recordUploadBtn.disabled = false;
+      elements.recordingStatus.textContent = "Recording stopped. Ready to transcribe.";
+      
+      mediaRecorder.onstop = () => {
+        const fileExt = currentMimeType.includes("webm") ? ".webm" : ".wav";
+        const audioBlob = new Blob(audioChunks, { type: currentMimeType || "audio/webm" });
+        elements.audioPlayer.src = URL.createObjectURL(audioBlob);
+        elements.audioPlayer.style.display = "block";
+      };
+    });
+
+    // Process recorded audio
+    elements.recordUploadBtn.addEventListener("click", async () => {
+      if (audioChunks.length === 0) {
+        elements.recordingStatus.textContent = "No recording found.";
+        return;
+      }
+      
+      const fileExt = currentMimeType.includes("webm") ? ".webm" : ".wav";
+      const audioBlob = new Blob(audioChunks, { type: currentMimeType || "audio/webm" });
+      const formData = new FormData();
+      formData.append("file", audioBlob, "recording" + fileExt);
+      
+      toggleSpinner(elements.recordSpinner, true);
+      elements.recordUploadBtn.disabled = true;
+      
+      try {
+        const response = await fetch(
+          `${backendURL}/upload-audio/?language=${elements.languageInput.value}`, 
+          { method: "POST", body: formData }
+        );
+        
+        const data = await response.json();
+        
+        if (data.transcription) {
+          elements.transcription.innerText = data.transcription;
+          elements.recordingStatus.textContent = "Transcription complete.";
+          
+          // Auto-select language
+          const lang = elements.languageInput.value;
+          if (lang && lang !== "auto") {
+            for (let i = 0; i < elements.inputLang.options.length; i++) {
+              if (elements.inputLang.options[i].value === lang) {
+                elements.inputLang.selectedIndex = i;
+                break;
+              }
+            }
+          }
+        } else {
+          elements.transcription.innerText = "Error processing audio.";
+          elements.recordingStatus.textContent = data.error || "Unknown error.";
+        }
+      } catch (err) {
+        elements.transcription.innerText = "Error uploading file.";
+        elements.recordingStatus.textContent = `Connection error: ${err.message}`;
+      } finally {
+        toggleSpinner(elements.recordSpinner, false);
+        elements.recordUploadBtn.disabled = false;
+      }
+    });
+
+    // Process uploaded file
+    elements.fileUploadBtn.addEventListener("click", async () => {
+      if (!elements.audioFile.files || elements.audioFile.files.length === 0) {
+        showError("Please select an audio file first.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", elements.audioFile.files[0]);
+      
+      toggleSpinner(elements.uploadSpinner, true);
+      elements.fileUploadBtn.disabled = true;
+      
+      try {
+        const response = await fetch(
+          `${backendURL}/upload-audio/?language=${elements.languageInput.value}`, 
+          { method: "POST", body: formData }
+        );
+        
+        const data = await response.json();
+        
+        if (data.transcription) {
+          elements.transcription.innerText = data.transcription;
+          
+          // Auto-select language
+          const lang = elements.languageInput.value;
+          if (lang && lang !== "auto") {
+            for (let i = 0; i < elements.inputLang.options.length; i++) {
+              if (elements.inputLang.options[i].value === lang) {
+                elements.inputLang.selectedIndex = i;
+                break;
+              }
+            }
+          }
+        } else {
+          elements.transcription.innerText = "Error processing audio.";
+        }
+      } catch (err) {
+        elements.transcription.innerText = `Error: ${err.message}`;
+      } finally {
+        toggleSpinner(elements.uploadSpinner, false);
+        elements.fileUploadBtn.disabled = false;
+      }
+    });
+
+    // Translate text
+    elements.translateBtn.addEventListener("click", async () => {
+      const text = elements.transcription.innerText.trim();
+      
+      if (!text || text === "Transcription will appear here.") {
+        showError("Please transcribe audio first or enter text to translate.");
+        return;
+      }
+      
+      toggleSpinner(elements.translateSpinner, true);
+      elements.translateBtn.disabled = true;
+      
+      try {
+        const response = await fetch(`${backendURL}/translate/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            text, 
+            source_lang: elements.inputLang.value, 
+            target_lang: elements.outputLang.value 
+          })
+        });
+        
+        if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+        
+        const data = await response.json();
+        elements.translation.textContent = data.translated_text || "Translation error.";
+      } catch (error) {
+        elements.translation.textContent = `Error: ${error.message}`;
+      } finally {
+        toggleSpinner(elements.translateSpinner, false);
+        elements.translateBtn.disabled = false;
+      }
+    });
+
+    // Text-to-speech
+    elements.speakTranslationBtn.addEventListener("click", async () => {
+      const text = elements.translation.textContent.trim();
+      
+      if (!text || text === "Translation will appear here.") {
+        showError("Please translate text first.");
+        return;
+      }
+      
+      toggleSpinner(elements.ttsSpinner, true);
+      elements.speakTranslationBtn.disabled = true;
+      elements.ttsAudio.style.display = "none";
+      
+      try {
+        const response = await fetch(
+          `${backendURL}/text-to-speech/?text=${encodeURIComponent(text)}&lang=${elements.outputLang.value}`, 
+          { method: "POST" }
+        );
+        
+        if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+        
+        const blob = await response.blob();
+        elements.ttsAudio.src = URL.createObjectURL(blob);
+        elements.ttsAudio.style.display = "block";
+      } catch (error) {
+        showError(`Text-to-speech error: ${error.message}`);
+      } finally {
+        toggleSpinner(elements.ttsSpinner, false);
+        elements.speakTranslationBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
